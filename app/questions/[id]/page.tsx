@@ -3,7 +3,7 @@
 import type React from 'react';
 import { useParams } from 'next/navigation';
 import { useEffect, useState, use } from 'react';
-import { useSession } from "next-auth/react"
+import { useSession } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -37,10 +37,10 @@ interface Question {
 	answers?: Answer[];
 }
 
-
 export default function QuestionDetailPage() {
 	const params = useParams();
 	const id = params.id as string;
+	const { data: session, status } = useSession();
 
 	// Helper function to format dates
 	const formatDate = (dateString: string) => {
@@ -104,75 +104,81 @@ export default function QuestionDetailPage() {
 	const [isSubmittingAnswer, setIsSubmittingAnswer] = useState(false);
 
 	const handleVote = (type: 'up' | 'down') => {
+		if (status !== 'authenticated') {
+			alert('You must be logged in to vote.');
+			return;
+		}
 		setUserVote(userVote === type ? null : type);
+		// TODO: Implement actual voting API call here
 	};
 
 	const handleAnswerSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (!newAnswer.trim() || !question) return;
 
+		if (status !== 'authenticated' || !session?.user?.email) {
+			alert('You must be logged in to post an answer.');
+			return;
+		}
+
 		setIsSubmittingAnswer(true);
 
 		try {
-			// For now, just add the answer locally
-			// In a real app, you'd call your API here
-			const answer: Answer = {
-				id: Date.now().toString(),
-				content: newAnswer,
-				author_username: 'testuser', // This should come from auth
-				author_avatar: '/placeholder.svg?height=32&width=32',
+			const res = await fetch('/api/answers', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					content: newAnswer,
+					questionId: question.id,
+					authorId: session.user.email,
+				}),
+			});
+
+			if (!res.ok) throw new Error('Failed to post answer');
+
+			const data = await res.json();
+
+			// Create the new answer with proper interface structure
+			const newAnswerObj: Answer = {
+				id: data.answer.id,
+				content: data.answer.content,
+				author_username: session.user.name || session.user.email || 'You',
+				author_avatar: session.user.image || '/placeholder.svg?height=32&width=32',
 				author_reputation: 0,
 				votes: 0,
 				is_accepted: false,
-				created_at: new Date().toISOString(),
+				created_at: data.answer.created_at || new Date().toISOString(),
 			};
 
-
-  const handleAnswerSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newAnswer.trim()) return;
-    if (!session?.user?.email) {
-      alert("You must be logged in to post an answer.");
-      return;
-    }
-    try {
-      const res = await fetch("/api/answers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          content: newAnswer,
-          questionId: question.id,
-          authorId: session.user.email,
-        }),
-      });
-      if (!res.ok) throw new Error("Failed to post answer");
-      const data = await res.json();
-      setAnswers([...answers, {
-        id: data.answer.id,
-        content: data.answer.content,
-        author: {
-          username: session.user.name || session.user.email || "You",
-          avatar: session.user.image || "/placeholder.svg?height=32&width=32",
-        },
-        votes: 0,
-        isAccepted: false,
-        createdAt: data.answer.created_at || "just now",
-      }]);
-      setNewAnswer("");
+			setAnswers([...answers, newAnswerObj]);
+			setNewAnswer('');
 		} catch (error) {
 			console.error('Error submitting answer:', error);
+			alert('Failed to post answer. Please try again.');
 		} finally {
 			setIsSubmittingAnswer(false);
 		}
 	};
 
 	const handleAcceptAnswer = (answerId: string) => {
+		if (status !== 'authenticated') {
+			alert('You must be logged in to accept answers.');
+			return;
+		}
+
+		// Check if the current user is the question author
+		if (session?.user?.email !== question?.author_username) {
+			alert('Only the question author can accept answers.');
+			return;
+		}
+
 		setAnswers(
 			answers.map((answer) => ({
 				...answer,
 				is_accepted: answer.id === answerId ? !answer.is_accepted : false,
 			}))
 		);
+		// TODO: Implement actual accept answer API call here
 	};
 
 	if (loading) {
@@ -340,13 +346,17 @@ export default function QuestionDetailPage() {
 										</div>
 										<div className="flex items-center justify-between">
 											<div className="flex items-center gap-2">
-												<Button
-													variant="ghost"
-													size="sm"
-													onClick={() => handleAcceptAnswer(answer.id)}
-												>
-													{answer.is_accepted ? 'Unaccept' : 'Accept Answer'}
-												</Button>
+												{/* Only show accept button if user is the question author */}
+												{status === 'authenticated' &&
+													session?.user?.email === question?.author_username && (
+														<Button
+															variant="ghost"
+															size="sm"
+															onClick={() => handleAcceptAnswer(answer.id)}
+														>
+															{answer.is_accepted ? 'Unaccept' : 'Accept Answer'}
+														</Button>
+													)}
 												<Button variant="ghost" size="sm">
 													<MessageCircle className="w-4 h-4 mr-1" />
 													Comment
@@ -375,24 +385,50 @@ export default function QuestionDetailPage() {
 			{/* Answer Form */}
 			<Card>
 				<CardHeader>
-					<h3 className="text-lg font-semibold">Your Answer</h3>
+					<div className="flex items-center justify-between">
+						<h3 className="text-lg font-semibold">Your Answer</h3>
+						{status === 'authenticated' && session?.user && (
+							<div className="flex items-center gap-2 text-sm text-gray-500">
+								<Avatar className="w-6 h-6">
+									<AvatarImage src={session.user.image || '/placeholder.svg'} />
+									<AvatarFallback>
+										{(session.user.name || session.user.email || 'U').charAt(0).toUpperCase()}
+									</AvatarFallback>
+								</Avatar>
+								<span>{session.user.name || session.user.email}</span>
+							</div>
+						)}
+					</div>
 				</CardHeader>
 				<CardContent>
-					<form onSubmit={handleAnswerSubmit}>
-						<RichTextEditor
-							content={newAnswer}
-							onChange={setNewAnswer}
-							placeholder="Write your answer here..."
-						/>
-						<div className="flex gap-2 mt-4">
-							<Button type="submit" disabled={!newAnswer.trim() || isSubmittingAnswer}>
-								{isSubmittingAnswer ? 'Posting...' : 'Post Answer'}
-							</Button>
-							<Button type="button" variant="outline">
-								Cancel
-							</Button>
+					{status === 'loading' ? (
+						<div className="text-center py-4">
+							<p className="text-gray-500">Loading...</p>
 						</div>
-					</form>
+					) : status === 'authenticated' ? (
+						<form onSubmit={handleAnswerSubmit}>
+							<RichTextEditor
+								content={newAnswer}
+								onChange={setNewAnswer}
+								placeholder="Write your answer here..."
+							/>
+							<div className="flex gap-2 mt-4">
+								<Button type="submit" disabled={!newAnswer.trim() || isSubmittingAnswer}>
+									{isSubmittingAnswer ? 'Posting...' : 'Post Answer'}
+								</Button>
+								<Button type="button" variant="outline" onClick={() => setNewAnswer('')}>
+									Cancel
+								</Button>
+							</div>
+						</form>
+					) : (
+						<div className="text-center py-6 bg-gray-50 rounded-lg">
+							<p className="text-gray-600 mb-4">You must be logged in to post an answer.</p>
+							<Link href="/login">
+								<Button>Sign In to Answer</Button>
+							</Link>
+						</div>
+					)}
 				</CardContent>
 			</Card>
 		</div>
