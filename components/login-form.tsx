@@ -1,19 +1,19 @@
-"use client"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import Link from "next/link"
-import { useState } from "react"
-import img from "../../public/google_logo.png"
+"use client";
 
-export default function LoginPage() {
-  const [isLoading, setIsLoading] = useState(false)
+import { signIn } from "next-auth/react";
 
-  const handleGoogleLogin = async () => {
-    setIsLoading(true)
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    setIsLoading(false)
-  }
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import Link from "next/link";
+import img from "@/public/google_logo.png";
 
+export default function LoginForm() {
   return (
     <div className="container mx-auto px-4 py-16 max-w-md">
       <Card>
@@ -24,13 +24,12 @@ export default function LoginPage() {
         <CardContent>
           <div className="space-y-4">
             <Button
-              onClick={handleGoogleLogin}
+              onClick={() => signIn("google")}
               className="w-full"
-              disabled={isLoading}
               variant="outline"
             >
               <img src={img.src} alt="Google" className="h-8 w-8" />
-              {isLoading ? "Signing in..." : "Log in with Google"}
+              Log in with Google
             </Button>
           </div>
 
@@ -45,5 +44,5 @@ export default function LoginPage() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
