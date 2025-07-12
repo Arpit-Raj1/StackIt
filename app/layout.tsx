@@ -4,8 +4,10 @@ import { Inter } from "next/font/google"
 import "./globals.css"
 import { Navigation } from "@/components/navigation"
 import { SessionProvider } from "@/components/providers/SessionProvider";
+import { Toaster } from '@/components/ui/sonner';
 
-const inter = Inter({ subsets: ["latin"] })
+
+const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: "StackIt - Q&A Forum Platform",
@@ -23,6 +25,7 @@ export default function RootLayout({
         <SessionProvider>
           <Navigation />
           <main className="min-h-screen bg-gray-50">{children}</main>
+          <Toaster />
         </SessionProvider>
       </body>
     </html>
