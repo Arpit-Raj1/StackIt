@@ -2,14 +2,15 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { RichTextEditor } from "@/components/rich-text-editor"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { ThumbsUp, ThumbsDown, MessageCircle, Share, Check, ArrowLeft } from "lucide-react"
-import { RichTextEditor } from "@/components/rich-text-editor"
+import { ArrowLeft, Check, MessageCircle, Share, ThumbsDown, ThumbsUp } from "lucide-react"
+import { useSession } from "next-auth/react"
 import Link from "next/link"
+import { use, useState } from "react"
 
 interface Answer {
   id: string
@@ -23,9 +24,12 @@ interface Answer {
   createdAt: string
 }
 
-export default function QuestionDetailPage({ params }: { params: { id: string } }) {
+export default function QuestionDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { data: session } = useSession();
+  const resolvedParams = use(params);
+
   const [question] = useState({
-    id: params.id,
+    id: resolvedParams.id,
     title: "How to implement authentication in Next.js 14?",
     content: `I'm trying to implement authentication in my Next.js 14 application using the app router. I've looked at several tutorials but I'm confused about the best practices.
 
@@ -115,25 +119,41 @@ The documentation is excellent and it handles all the edge cases for you.`,
     setUserVote(userVote === type ? null : type)
   }
 
-  const handleAnswerSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newAnswer.trim()) return
-
-    const answer: Answer = {
-      id: Date.now().toString(),
-      content: newAnswer,
-      author: {
-        username: "currentuser",
-        avatar: "/placeholder.svg?height=32&width=32",
-      },
-      votes: 0,
-      isAccepted: false,
-      createdAt: "just now",
+  const handleAnswerSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAnswer.trim()) return;
+    if (!session?.user?.email) {
+      alert("You must be logged in to post an answer.");
+      return;
     }
-
-    setAnswers([...answers, answer])
-    setNewAnswer("")
-  }
+    try {
+      const res = await fetch("/api/answers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: newAnswer,
+          questionId: question.id,
+          authorId: session.user.email,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to post answer");
+      const data = await res.json();
+      setAnswers([...answers, {
+        id: data.answer.id,
+        content: data.answer.content,
+        author: {
+          username: session.user.name || session.user.email || "You",
+          avatar: session.user.image || "/placeholder.svg?height=32&width=32",
+        },
+        votes: 0,
+        isAccepted: false,
+        createdAt: data.answer.created_at || "just now",
+      }]);
+      setNewAnswer("");
+    } catch (err) {
+      alert("Error posting answer: " + (err as Error).message);
+    }
+  };
 
   const handleAcceptAnswer = (answerId: string) => {
     setAnswers(
