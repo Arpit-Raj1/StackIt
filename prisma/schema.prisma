@@ -71,7 +71,6 @@ model User {
   username      String?   @unique
   email         String    @unique
   emailVerified DateTime?
-  avatarUrl     String?   @map("avatar_url")
   image         String?
   role          Role      @default(user)
   reputation    Int       @default(0)
