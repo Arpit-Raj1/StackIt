@@ -1,6 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { questionQueries } from '@/lib/queries';
 
+// GET method to fetch questions
+export async function GET(request: NextRequest) {
+	try {
+		const { searchParams } = new URL(request.url);
+		const page = parseInt(searchParams.get('page') || '1');
+		const limit = parseInt(searchParams.get('limit') || '10');
+		const sortBy = searchParams.get('sortBy') || 'created_at';
+
+		const questions = await questionQueries.getQuestions(page, limit, sortBy);
+
+		return NextResponse.json({
+			success: true,
+			questions,
+			page,
+			limit,
+		});
+	} catch (error) {
+		console.error('Error fetching questions:', error);
+		return NextResponse.json({ error: 'Failed to fetch questions' }, { status: 500 });
+	}
+}
+
 export async function POST(request: NextRequest) {
 	try {
 		const body = await request.json();
