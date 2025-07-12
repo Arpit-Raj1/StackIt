@@ -2,7 +2,8 @@
 
 import type React from 'react';
 import { useParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, use } from 'react';
+import { useSession } from "next-auth/react"
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -35,6 +36,7 @@ interface Question {
 	created_at: string;
 	answers?: Answer[];
 }
+
 
 export default function QuestionDetailPage() {
 	const params = useParams();
@@ -125,8 +127,38 @@ export default function QuestionDetailPage() {
 				created_at: new Date().toISOString(),
 			};
 
-			setAnswers([...answers, answer]);
-			setNewAnswer('');
+
+  const handleAnswerSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAnswer.trim()) return;
+    if (!session?.user?.email) {
+      alert("You must be logged in to post an answer.");
+      return;
+    }
+    try {
+      const res = await fetch("/api/answers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: newAnswer,
+          questionId: question.id,
+          authorId: session.user.email,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to post answer");
+      const data = await res.json();
+      setAnswers([...answers, {
+        id: data.answer.id,
+        content: data.answer.content,
+        author: {
+          username: session.user.name || session.user.email || "You",
+          avatar: session.user.image || "/placeholder.svg?height=32&width=32",
+        },
+        votes: 0,
+        isAccepted: false,
+        createdAt: data.answer.created_at || "just now",
+      }]);
+      setNewAnswer("");
 		} catch (error) {
 			console.error('Error submitting answer:', error);
 		} finally {
